@@ -16,13 +16,12 @@
 import collections
 import functools
 import os
-from typing import Annotated, Any, cast
+from typing import Annotated, Any
 
 import langfun.core as lf
 from langfun.core import modalities as lf_modalities
 import openai
-from openai import error as openai_error
-from openai import openai_object
+from openai import OpenAIError, RateLimitError, APIError
 import pyglove as pg
 
 
@@ -185,16 +184,35 @@ class OpenAI(lf.LanguageModel):
     else:
       return self._complete_batch(prompts)
 
+  @functools.cached_property
+  def _client(self):
+      return openai.OpenAI(
+          api_key=self.api_key,
+      )
+
+  def _map_role(self, role: str) -> str:
+      match role.lower():
+        case 'user':
+            return 'user'
+        case 'ai':
+            return 'assistant'
+        case 'system':
+            return 'system'
+        case _:
+            return 'user'
+
   def _complete_batch(
       self, prompts: list[lf.Message]
   ) -> list[lf.LMSamplingResult]:
 
     def _open_ai_completion(prompts):
-      response = openai.Completion.create(
-          prompt=[p.text for p in prompts],
+      messages = [{
+                     "role": self._map_role(m.sender),
+                     "content": m.text} for m in prompts if m.text]
+      response = self._client.chat.completions.create(
+          messages=messages,
           **self._get_request_args(self.sampling_options),
-      )
-      response = cast(openai_object.OpenAIObject, response)
+        )
       # Parse response.
       samples_by_index = collections.defaultdict(list)
       for choice in response.choices:
@@ -218,11 +236,11 @@ class OpenAI(lf.LanguageModel):
         _open_ai_completion,
         [prompts],
         retry_on_errors=(
-            openai_error.ServiceUnavailableError,
-            openai_error.RateLimitError,
+            OpenAIError,
+            RateLimitError,
             # Handling transient OpenAI server error (code 500). Check out
             # https://platform.openai.com/docs/guides/error-codes/error-codes
-            (openai_error.APIError,
+            (APIError,
              '.*The server had an error processing your request'),
         ),
     )[0]
@@ -245,12 +263,11 @@ class OpenAI(lf.LanguageModel):
       else:
         content = prompt.text
 
-      response = openai.ChatCompletion.create(
+      response = self._client.chat.completions.create(
           # TODO(daiyip): support conversation history and system prompt.
           messages=[{'role': 'user', 'content': content}],
           **self._get_request_args(self.sampling_options),
       )
-      response = cast(openai_object.OpenAIObject, response)
       samples = []
       for choice in response.choices:
         logprobs = None
@@ -284,8 +301,8 @@ class OpenAI(lf.LanguageModel):
         _open_ai_chat_completion,
         prompts,
         retry_on_errors=(
-            openai_error.ServiceUnavailableError,
-            openai_error.RateLimitError,
+            OpenAIError,
+            RateLimitError,
         ),
     )
 
