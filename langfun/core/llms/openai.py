@@ -35,6 +35,7 @@ SUPPORTED_MODELS_AND_SETTINGS = {
     # GPT-4o models
     'gpt-4o': pg.Dict(rpm=10000, tpm=5000000),
     'gpt-4o-2024-05-13': pg.Dict(rpm=10000, tpm=5000000),
+    'gpt-4o-mini': pg.Dict(rpm=10000, tpm=5000000),
     # GPT-4-Turbo models
     'gpt-4-turbo': pg.Dict(rpm=10000, tpm=2000000),
     'gpt-4-turbo-2024-04-09': pg.Dict(rpm=10000, tpm=2000000),
@@ -368,6 +369,11 @@ class Gpt4_32K_20230613(Gpt4_32K):    # pylint:disable=invalid-name
 class Gpt4o(OpenAI):
   """GPT-4o."""
   model = 'gpt-4o'
+  multimodal = True
+
+class Gpt4o_mini(OpenAI):
+  """GPT-4o mini."""
+  model = 'gpt-4o-mini'
   multimodal = True
 
 
